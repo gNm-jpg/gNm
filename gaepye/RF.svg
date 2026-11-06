@@ -1,0 +1,81 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 180" width="1280" height="720" shape-rendering="crispEdges">
+<foreignObject id="px" x="0" y="0" width="320" height="180"/>
+<script><![CDATA[
+const W=320,H=180,NS="http://www.w3.org/2000/svg";
+let s=7;const rnd=()=>{s|=0;s=s+0x6D2B79F5|0;let t=Math.imul(s^s>>>15,1|s);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296};
+const ri=(a,b)=>a+Math.floor(rnd()*(b-a+1));
+const wall=['#1a1420','#241b2b','#2f2436','#3b2e42','#4a3a4f','#5c4a5c'];
+const floor=['#1c1712','#2a2118','#3a2e20','#4b3c2a','#5e4b34','#76603f'];
+const torches=[[60,62],[160,58],[260,62]];
+const bayer=[[0,8,2,10],[12,4,14,6],[3,11,1,9],[15,7,13,5]];
+const horizon=100;
+const noise=(x,y,k)=>(Math.sin(x*.13+k)*Math.cos(y*.17-k)+Math.sin(x*.041+y*.057+k*2))*.5;
+const light=(x,y)=>Math.max(...torches.map(([tx,ty])=>Math.max(0,1-Math.hypot(x-tx,(y-ty)*1.2)/85)));
+const g=[...Array(H)].map(()=>Array(W));
+for(let y=0;y<H;y++)for(let x=0;x<W;x++){
+  const L=light(x,y);let v,pal;
+  if(y<horizon+Math.trunc(4*Math.sin(x*.05)+3*noise(x,0,1))){
+    v=.35+.3*(noise(x,y,.5)+rnd()*.15)+L*.9-Math.max(0,1-y/40)*.5;
+    if((y%14==0&&rnd()<.6)||((x+Math.floor(y/14)*9)%23==0&&rnd()<.7))v-=.35;
+    pal=wall;
+  }else{
+    const dy=Math.max(0,y-horizon);
+    v=.35+.25*(noise(x*1.5,y*2,3)+rnd()*.2)+L*.8+dy/80*.3;
+    const row=Math.trunc(Math.log(dy+6)*6);
+    if(row!=Math.trunc(Math.log(dy+5)*6))v-=.4;
+    const k=1+dy*.04;
+    if(Math.trunc((x-160)/k/18+row*.5)!=Math.trunc((x-161)/k/18+row*.5))v-=.35;
+    pal=floor;
+  }
+  const t=bayer[y%4][x%4]/16-.5;
+  g[y][x]=pal[Math.trunc(Math.max(0,Math.min(5,v*6+t)))];
+}
+for(let i=0;i<40;i++){const sx=ri(0,W-1),ln=ri(4,22),w=ri(2,5);
+  for(let k=0;k<ln;k++){const ww=Math.trunc(w*(1-k/ln));
+    for(let xx=sx-ww;xx<=sx+ww;xx++)if(xx>=0&&xx<W)g[k][xx]=xx<sx?wall[1]:wall[2];}}
+for(let i=0;i<25;i++){const rx=ri(0,W),ry=horizon+ri(-6,2),r=ri(2,6);
+  for(let yy=ry-r;yy<=ry;yy++)for(let xx=rx-r*2;xx<rx+r*2;xx++)
+    if(xx>=0&&xx<W&&yy>=0&&yy<H&&((xx-rx)/2)**2+(yy-ry)**2<=r*r)
+      g[yy][xx]=(yy<ry-r/2&&xx<rx)?wall[3]:wall[1];}
+const flame=[[0,-1,'#fff4b0'],[0,-2,'#fff4b0'],[1,-1,'#ffd54a'],[-1,-1,'#ffd54a'],[0,-3,'#ffd54a'],[1,-2,'#ffd54a'],
+ [-1,-2,'#ff9a2a'],[2,0,'#ff9a2a'],[-2,0,'#ff9a2a'],[1,-3,'#ff9a2a'],[0,-4,'#ff9a2a'],[0,-5,'#e0521c'],
+ [-1,-4,'#e0521c'],[1,-5,'#e0521c'],[0,0,'#ffd54a'],[1,0,'#ffd54a'],[-1,0,'#ff9a2a'],[0,-6,'#a8321a']];
+for(const[tx,ty]of torches){
+  for(let yy=ty;yy<ty+14;yy++){g[yy][tx]=g[yy][tx+1]='#5a3a1e';g[yy][tx-1]='#3a2410';}
+  for(let yy=ty+2;yy<ty+5;yy++)for(let xx=tx-2;xx<tx+4;xx++)g[yy][xx]=yy==ty+2?'#6e6e78':'#45454e';
+  }
+const tint=(c,a)=>{const r=parseInt(c.substr(1,2),16),gg=parseInt(c.substr(3,2),16),b=c.substr(5,2);
+  const h=n=>Math.min(255,Math.trunc(n)).toString(16).padStart(2,'0');return'#'+h(r+a*70)+h(gg+a*35)+b;};
+// ---- 애니메이션 ----
+const base=g.map(r=>r.slice());
+const cache={};const rgb=c=>cache[c]||(cache[c]=[parseInt(c.substr(1,2),16),parseInt(c.substr(3,2),16),parseInt(c.substr(5,2),16)]);
+const fo=document.getElementById('px');
+const cv=document.createElementNS('http://www.w3.org/1999/xhtml','canvas');cv.width=W;cv.height=H;
+cv.setAttribute('style','width:320px;height:180px;image-rendering:pixelated;display:block');fo.appendChild(cv);
+const ctx=cv.getContext('2d');const img=ctx.createImageData(W,H);const px=img.data;
+const embers=[];const t0=performance.now();
+const put=(x,y,c)=>{if(x<0||x>=W||y<0||y>=H)return;const[r,gg,b]=rgb(c);const k=(y*W+x)*4;px[k]=r;px[k+1]=gg;px[k+2]=b;px[k+3]=255;};
+function frame(now){const t=(now-t0)/1000;
+  // 횃불마다 빛 세기 일렁임
+  const fl=torches.map((p,i)=>.88+.08*Math.sin(t*9+i*2.1)+.06*Math.sin(t*23.7+i*5.3)+.04*(Math.random()-.5));
+  for(let y=0;y<H;y++)for(let x=0;x<W;x++){let Lt=0;
+    for(let i=0;i<torches.length;i++){const[tx,ty]=torches[i];const v=1-Math.hypot(x-tx,(y-ty)*1.2)/(85*fl[i]);if(v>Lt)Lt=v;}
+    let[r,gg,b]=rgb(base[y][x]);
+    if(Lt>.05){const a=Math.round(Lt*4)/4;r=Math.min(255,r+a*70);gg=Math.min(255,gg+a*35);}
+    const k=(y*W+x)*4;px[k]=r;px[k+1]=gg;px[k+2]=b;px[k+3]=255;}
+  // 불꽃 흔들림
+  for(let i=0;i<torches.length;i++){const[tx,ty]=torches[i];
+    const sway=Math.round(Math.sin(t*6+i)*.7+(Math.random()-.5)*.6);
+    for(const[dx,dy,c]of flame){
+      if(dy<=-5&&Math.random()<.35)continue;
+      if(dy<=-3&&fl[i]<.86&&Math.random()<.4)continue;
+      put(tx+dx+(dy<-2?sway:0),ty+dy+1,c);}
+    if(Math.random()<.15)embers.push({x:tx+(Math.random()-.5)*2,y:ty-5,vx:(Math.random()-.5)*.3,vy:-.25-Math.random()*.3,life:40+Math.random()*40});}
+  // 떠오르는 불씨
+  for(let j=embers.length-1;j>=0;j--){const e=embers[j];e.x+=e.vx+Math.sin(t*3+j)*.1;e.y+=e.vy;e.life--;
+    if(e.life<=0||e.y<0){embers.splice(j,1);continue;}
+    put(Math.round(e.x),Math.round(e.y),e.life>30?'#ffd54a':e.life>15?'#ff9a2a':'#e0521c');}
+  ctx.putImageData(img,0,0);requestAnimationFrame(frame);}
+requestAnimationFrame(frame);
+  ]]></script>
+  </svg>
